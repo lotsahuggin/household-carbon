@@ -24,6 +24,7 @@ if "original_total_emissions" not in st.session_state:
 uk_average_emissions = 500  # Replace with actual average monthly household emissions in kg CO2e
 original_total_emissions = 0 # Initialise to avoid error in sharing section
 new_total_emissions = 0
+colors = [ "#2364aa", "#17c3b2", "#ffcb77", "#fef9ef", "#ff6b6b", "#a4243b", "#041b15", "#00ff00"]
 
 
 st.title("Household Carbon Footprint Calculator")
@@ -42,32 +43,45 @@ st.header("Calculate Footprint", anchor="calculate-footprint")
 
 st.subheader("Home Energy", divider="blue")
 
+# Manual or estimated heating and electricity consumption
 
-# Number of bedrooms
-num_bedrooms = st.number_input("Enter the number of bedrooms in your house:", min_value=1, value=1)
+home_energy_type = st.selectbox("Do you know your gas and electricity consumption in kWh?", ["Yes", "No"])
 
-# Insulation level
-insulation_level = st.selectbox("Select your home's insulation level:", ["Well Insulated", "Average Home", "Poorly Insulated"])
+if home_energy_type == "Yes":
+    gas = st.number_input("Enter your annual gas consumption in kWh:", min_value = 1, value = 7500) / 12
+    electricity = st.number_input("Enter your annual electricity consumption in kWh:", min_value=1, value = 1800) / 12
+    check_solar_panels = st.checkbox("Do you have solar panels that offset some of your electricity consumption?")
+    if check_solar_panels:
+        solar_panel_modifier = st.slider("How much do solar panels offset your electricity consumption figure above by:", 0, 100, 10, 5)
+        electricity = electricity * (1 - solar_panel_modifier / 100)
 
-# Estimated electricity and gas consumption based on bedrooms, insulation, and heating source
-# From https://www.ofgem.gov.uk/average-gas-and-electricity-usage
+else:
 
-# Base consumption values
-base_electricity_consumption = {
-    "Well Insulated": [1800/12, 2700/12, 4100/12],
-    "Average Home": [1800/12, 2700/12, 4100/12],
-    "Poorly Insulated": [1800/12, 2700/12, 4100/12],
-}
+    # Number of bedrooms
+    num_bedrooms = st.number_input("Enter the number of bedrooms in your house:", min_value=1, value=1)
 
-base_gas_consumption = {
-    "Well Insulated": [7500/12*0.8, 11500/12*0.8, 17000/12*0.8],
-    "Average Home": [7500/12, 11500/12, 17000/12],
-    "Poorly Insulated": [7500/12*1.2, 11500/12*1.2, 17000/12*1.2],
-}
+    # Insulation level
+    insulation_level = st.selectbox("Select your home's insulation level:", ["Well Insulated", "Average Home", "Poorly Insulated"])
 
-# Adjust consumption based on heating source
-electricity = base_electricity_consumption[insulation_level][min(num_bedrooms - 1, 2)]
-gas = base_gas_consumption[insulation_level][min(num_bedrooms - 1, 2)]
+    # Estimated electricity and gas consumption based on bedrooms, insulation, and heating source
+    # From https://www.ofgem.gov.uk/average-gas-and-electricity-usage
+
+    # Base consumption values
+    base_electricity_consumption = {
+        "Well Insulated": [1800/12, 2700/12, 4100/12],
+        "Average Home": [1800/12, 2700/12, 4100/12],
+        "Poorly Insulated": [1800/12, 2700/12, 4100/12],
+    }
+
+    base_gas_consumption = {
+        "Well Insulated": [7500/12*0.8, 11500/12*0.8, 17000/12*0.8],
+        "Average Home": [7500/12, 11500/12, 17000/12],
+        "Poorly Insulated": [7500/12*1.2, 11500/12*1.2, 17000/12*1.2],
+    }
+
+    # Adjust consumption based on heating source
+    electricity = base_electricity_consumption[insulation_level][min(num_bedrooms - 1, 2)]
+    gas = base_gas_consumption[insulation_level][min(num_bedrooms - 1, 2)]
 
 
 st.subheader("Travel", divider="green")
@@ -125,6 +139,7 @@ st.subheader("Food", divider="orange")
 
 # Number of people in the house
 num_people = st.number_input("Enter the number of people in your household:", min_value=1, value=1)
+num_kids = st.number_input("Of those, how many are children under 12 years old (to work out impact of food choices):", min_value = 0, value = 0)
 
 # Diet type
 diet_type = st.selectbox("Select your diet type:", ["Meat-heavy", "Average", "Vegetarian", "Vegan"])
@@ -138,6 +153,20 @@ st.subheader("Household Waste", divider="orange")
 # Household waste
 
 bin_bags = st.number_input("How many large bin bags of unrecycled household waste per week:", min_value=0, value=1)
+
+st.subheader("Pets", divider = "blue")
+
+# Pets
+
+num_small_pets = 0
+num_medium_pets = 0
+num_large_pets = 0
+pets_check = st.checkbox("Do you own any pets?")
+
+if pets_check:
+    num_small_pets = st.number_input("How many cats or small dogs (or equivalent)?", min_value = 0, value = 1)
+    num_medium_pets = st.number_input("How many medium-sized dogs (or equivalent)?", min_value = 0, value = 0)
+    num_large_pets = st.number_input("How many large dogs (or equivalent)?", min_value = 0, value = 0)
 
 # Initialize total_emissions in session state
 
@@ -154,6 +183,9 @@ AVERAGE_DIET_FACTOR = 2000  # kg CO2e per year, from https://www.ethicalconsumer
 VEGETARIAN_FACTOR = 1390  # kg CO2e per year, from https://www.ethicalconsumer.org/food-drink/climate-impact-meat-vegetarian-vegan-diets
 VEGAN_FACTOR = 1000  # kg CO2e per year, from https://www.ethicalconsumer.org/food-drink/climate-impact-meat-vegetarian-vegan-diets
 HOUSEHOLD_WASTE_FACTOR = 497 # kg CO2e per tonne, 2024 emissions factor
+SMALL_PETS = 300 # kg per animal https://academic.oup.com/bioscience/article/69/6/467/5486563?login=false]
+MEDIUM_PETS = 900
+LARGE_PETS = 1400
 
 # UK averages (from https://energyguide.org.uk/average-carbon-footprint-uk/)
 ELECTRICITY_UK = 1100 / 12
@@ -161,10 +193,10 @@ GAS_UK = 2200 / 12
 CAR_UK = 1700 / 12
 PUBLIC_TRANSPORT_UK =  "unknown"
 AIR_UK = "unknown"
-FOOD_UK = AVERAGE_DIET_FACTOR / 12 * num_people
+FOOD_UK = AVERAGE_DIET_FACTOR / 12 * (num_people - num_kids / 2) # Assumes children under 12 eat half that of an adult
 
 
-def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags):
+def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags, num_small_pets, num_medium_pets, num_large_pets):
     """Calculates the household carbon footprint based on user inputs."""
 
     # Calculate home energy emissions
@@ -172,6 +204,8 @@ def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type
     gas_emissions = gas * GAS_FACTOR
 
     # Calculate travel emissions
+    ELECTRIC_CAR_FACTOR = 0
+    ELECTRIC_CAR_FACTOR_2 = 0
     if car_size == "Small":
         PETROL_FACTOR = 0.14
         DIESEL_FACTOR = 0.23
@@ -186,6 +220,7 @@ def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type
         ELECTRIC_CAR_FACTOR = 0.07  # kg CO2e per mile, 2024 emissions factor for medium car
         HYBRID_CAR_FACTOR = 0.18  # kg CO2e per mile, 2024 emissions factor for medium car
     
+    car_emissions = 0
     if car_type == "Petrol":
         car_emissions = car_mileage * PETROL_FACTOR
     elif car_type == "Diesel":
@@ -194,7 +229,7 @@ def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type
         car_emissions = car_mileage * ELECTRIC_CAR_FACTOR
     elif car_type == "Hybrid":
         car_emissions = car_mileage * HYBRID_CAR_FACTOR
-    else:
+    elif car_type == "None":
         car_emissions = 0
 
     if car_size_2 == "Small":
@@ -245,11 +280,15 @@ def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type
 
     # Adjust food emissions for waste
     food_emissions *= (1 + food_waste / 100)
-    food_emissions *= num_people
+    food_emissions *= (num_people - num_kids / 2)
 
     # Calculate household waste
 
     household_waste_emissions = HOUSEHOLD_WASTE_FACTOR * 0.01 * bin_bags * 4.2 # 10kg per bag, 4.2 weeks per month
+
+    # Calculate pet emissions
+
+    pet_emissions = (num_small_pets * SMALL_PETS + num_medium_pets * MEDIUM_PETS + num_large_pets * LARGE_PETS) / 12
 
     # Calculate total emissions
     total_emissions = (
@@ -260,15 +299,16 @@ def calculate_carbon_footprint(electricity, gas, car_type, car_mileage, car_type
         + air_travel_emissions
         + food_emissions
         + household_waste_emissions
+        + pet_emissions
     )
 
-    return total_emissions, electricity_emissions, gas_emissions, car_emissions, public_transport_emissions, air_travel_emissions, food_emissions, household_waste_emissions
+    return total_emissions, electricity_emissions, gas_emissions, car_emissions, public_transport_emissions, air_travel_emissions, food_emissions, household_waste_emissions, pet_emissions
 
 # Calculate and display results when the button is clicked
 if calculate_button:
 
-    total_emissions, electricity_emissions, gas_emissions, car_emissions, public_transport_emissions, air_travel_emissions, food_emissions, household_waste_emissions = calculate_carbon_footprint(
-        electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags
+    total_emissions, electricity_emissions, gas_emissions, car_emissions, public_transport_emissions, air_travel_emissions, food_emissions, household_waste_emissions, pet_emissions = calculate_carbon_footprint(
+        electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags, num_small_pets, num_medium_pets, num_large_pets
     )
 
     # Set original emissions calculation to original variables
@@ -280,12 +320,13 @@ if calculate_button:
     st.session_state.original_air_travel_emissions = air_travel_emissions
     st.session_state.original_food_emissions = food_emissions
     st.session_state.original_household_waste_emissions = household_waste_emissions
+    st.session_state.original_pet_emissions = pet_emissions
 
     st.write("## Your estimated monthly carbon footprint is:", round(total_emissions, 2), "kg CO2e")
 
     # Create pie chart
     fig, ax = plt.subplots(figsize=(8, 6))
-    labels = ["Electricity", "Gas", "Car", "Public Transport", "Air Travel", "Food", "Household Waste"]
+    labels = ["Electricity", "Gas", "Car", "Public Transport", "Air Travel", "Food", "Household Waste", "Pets"]
     sizes = [
         st.session_state.original_electricity_emissions,
         st.session_state.original_gas_emissions,
@@ -293,9 +334,9 @@ if calculate_button:
         st.session_state.original_public_transport_emissions,
         st.session_state.original_air_travel_emissions,
         st.session_state.original_food_emissions,
-        st.session_state.original_household_waste_emissions
+        st.session_state.original_household_waste_emissions,
+        st.session_state.original_pet_emissions
     ]
-    colors = ["blue", "blue", "green", "green", "green", "orange", "orange"]
     ax.pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%", startangle=140)  # Adjust start angle for better layout
     ax.axis("equal")  # Ensure the pie is drawn as a circle
     ax.set_title("Carbon Footprint Breakdown")
@@ -311,10 +352,10 @@ if calculate_button:
     FOOD_PERCENT = st.session_state.original_food_emissions / FOOD_UK
 
     data = {
-        "Category": ["Electricity", "Gas", "Car", "Public Transport", "Air", "Food"],  # Use a list for consistency
-        "UK Average (kgCO2e/mth)": [f"{round(ELECTRICITY_UK, 2)}", f"{round(GAS_UK, 2)}", f"{round(CAR_UK, 2)}", f"{PUBLIC_TRANSPORT_UK}", f"{AIR_UK}", f"{round(FOOD_UK, 2)}"],
-        "Your Result (kgCO2e/mth)": [f"{round(st.session_state.original_electricity_emissions, 2)}", f"{round(st.session_state.original_gas_emissions, 2)}", f"{round(st.session_state.original_car_emissions, 2)}", f"{round(st.session_state.original_public_transport_emissions, 2)}", f"{round(st.session_state.original_air_travel_emissions, 2)}", f"{round(st.session_state.original_food_emissions, 2)}"],
-        "Percent of UK Average": [f"{round(100*ELECTRICITY_PERCENT, 2)}%", f"{round(100*GAS_PERCENT, 2)}%", f"{round(100*CAR_PERCENT, 2)}%", f"{PUBLIC_TRANSPORT_PERCENT}%", f"{AIR_PERCENT}%", f"{round(100*FOOD_PERCENT, 2)}%"],  # Add '%' symbol
+        "Category": ["Electricity", "Gas", "Car", "Public Transport", "Air", "Food", "Household Waste", "Pets"],  # Use a list for consistency
+        "UK Average (kgCO2e/mth)": [f"{round(ELECTRICITY_UK, 2)}", f"{round(GAS_UK, 2)}", f"{round(CAR_UK, 2)}", f"{PUBLIC_TRANSPORT_UK}", f"{AIR_UK}", f"{round(FOOD_UK, 2)}", "unknown", "unknown"],
+        "Your Result (kgCO2e/mth)": [f"{round(st.session_state.original_electricity_emissions, 2)}", f"{round(st.session_state.original_gas_emissions, 2)}", f"{round(st.session_state.original_car_emissions, 2)}", f"{round(st.session_state.original_public_transport_emissions, 2)}", f"{round(st.session_state.original_air_travel_emissions, 2)}", f"{round(st.session_state.original_food_emissions, 2)}", f"{round(st.session_state.original_household_waste_emissions, 2)}", f"{round(st.session_state.original_pet_emissions, 2)}"],
+        "Percent of UK Average": [f"{round(100*ELECTRICITY_PERCENT, 2)}%", f"{round(100*GAS_PERCENT, 2)}%", f"{round(100*CAR_PERCENT, 2)}%", f"{PUBLIC_TRANSPORT_PERCENT}%", f"{AIR_PERCENT}%", f"{round(100*FOOD_PERCENT, 2)}%", "unknown", "unknown"],  # Add '%' symbol
     }
 
     # Create a Pandas DataFrame
@@ -325,11 +366,11 @@ if calculate_button:
         'text-align': 'center',  # Center align the text
     }).hide(axis="index"))  # Hide the index column
 
-    st.write("Food consumption adjusted for the number of people in your household. Most averages from [Energy Guide](https://energyguide.org.uk/average-carbon-footprint-uk/). Some averages are quite hard to come by - advice welcome!")
+    st.write("Most averages from [Energy Guide](https://energyguide.org.uk/average-carbon-footprint-uk/). Some averages are quite hard to come by - advice welcome!")
 
 st.header("Take Action to Reduce Your Footprint", anchor="take-action")
 
-st.write("Explore how changes in your behavior can impact your carbon footprint:")
+st.write("Explore how changes in your behaviour can impact your carbon footprint:")
 
 # --- Home Energy ---
 st.subheader("Home Energy")
@@ -349,18 +390,25 @@ reduce_car = st.checkbox("Reduce car usage (e.g., walk, cycle, use public transp
 if reduce_car:
     car_reduction = st.slider("Estimated reduction in car mileage (%)", 0, 100, 10, 5)
 
-smaller_first_car = False
-if car_size != "Small":
-    smaller_first_car = st.checkbox("Drive a smaller car")
-    if smaller_first_car:
-        new_car_1_size = st.selectbox("Select your new car size:", ["Large","Medium", "Small"])
+diff_first_car = False
+if car_type != "None":
+    diff_first_car = st.checkbox("Drive a smaller or different type of car")
+    if diff_first_car:
+        new_car_1_type = st.selectbox("Select your new car type:", ["None", "Petrol", "Diesel", "Electric", "Hybrid"])
+        if new_car_1_type != "None":
+            new_car_1_size = st.selectbox("Select your new car size:", ["Large","Medium", "Small"])
+        else:
+            new_car_1_size = "Small"
 
-smaller_second_car = False
+diff_second_car = False
 if car_type_2 != "None":
-    if car_size_2 != "Small":
-        smaller_second_car = st.checkbox("Drive a smaller second car")
-        if smaller_second_car:
+    diff_second_car = st.checkbox("Drive a smaller or different second car")
+    if diff_second_car:
+        new_car_2_type = st.selectbox("Select your new second car type:", ["None", "Petrol", "Diesel", "Electric", "Hybrid"])
+        if new_car_2_type != "None":
             new_car_2_size = st.selectbox("Select your new second car size:", ["Large","Medium", "Small"])
+        else:
+            new_car_2_size = "Small"
 
 reduce_flights = st.checkbox("Reduce air travel")
 if reduce_flights:
@@ -389,12 +437,12 @@ if st.button("Calculate New Carbon Footprint"):
     if reduce_car:
         car_mileage *= (1 - car_reduction / 100)
         car_mileage_2 *= (1 - car_reduction / 100)
-    if car_type_2 != "None":
-        if car_size_2 != "Small":
-            if smaller_second_car:
-                car_size_2 = new_car_2_size
-    if smaller_first_car:
+    if diff_second_car:
+        car_size_2 = new_car_2_size
+        car_type_2 = new_car_2_type
+    if diff_first_car:
         car_size = new_car_1_size
+        car_type = new_car_1_type
     if reduce_flights:
         air_travel *= (1 - flights_reduction / 100)
     if improve_diet:
@@ -404,8 +452,8 @@ if st.button("Calculate New Carbon Footprint"):
         food_waste *= (1 - food_waste_reduction / 100)
 
     # Recalculate footprint
-    new_total_emissions, new_electricity_emissions, new_gas_emissions, new_car_emissions, new_public_transport_emissions, new_air_travel_emissions, new_food_emissions, new_household_waste_emissions = calculate_carbon_footprint(
-        electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags
+    new_total_emissions, new_electricity_emissions, new_gas_emissions, new_car_emissions, new_public_transport_emissions, new_air_travel_emissions, new_food_emissions, new_household_waste_emissions, new_pet_emissions = calculate_carbon_footprint(
+        electricity, gas, car_type, car_mileage, car_type_2, car_mileage_2, rail_transport, bus_transport, air_travel, diet_type, food_waste, bin_bags, num_small_pets, num_medium_pets, num_large_pets
     )
 
     st.write("## Your new estimated monthly carbon footprint is:", round(new_total_emissions, 2), "kg CO2e")
@@ -440,24 +488,31 @@ if st.button("Calculate New Carbon Footprint"):
         "Original": st.session_state.original_household_waste_emissions,
         "Revised": new_household_waste_emissions,
     }
+    pets_ch = {
+        "Original": st.session_state.original_pet_emissions,
+        "Revised": new_pet_emissions,
+    }
 
     # Create a stacked bar chart
     st.bar_chart({
         "Electricity": electricity_ch,
         "Gas": gas_ch,
+        "Car": car_ch,
         "Public Transport": pt_ch,
         "Air Travel": air_ch,
         "Food": food_ch,
         "Household Waste": waste_ch,
-    }
+        "Pets": pets_ch,
+    },
+    color=colors
     )
     
     # Table
 
     data = {
-        "Category": ["Electricity", "Gas", "Car", "Public Transport", "Air", "Food"],  # Use a list for consistency
-        "Your Original Result (kgCO2e/mth)": [f"{round(st.session_state.original_electricity_emissions, 2)}", f"{round(st.session_state.original_gas_emissions, 2)}", f"{round(st.session_state.original_car_emissions, 2)}", f"{round(st.session_state.original_public_transport_emissions, 2)}", f"{round(st.session_state.original_air_travel_emissions, 2)}", f"{round(st.session_state.original_food_emissions, 2)}"],
-        "Your New Carbon Footprint (kgCO2e/mth)": [f"{round(new_electricity_emissions, 2)}", f"{round(new_gas_emissions, 2)}", f"{round(new_car_emissions, 2)}", f"{round(new_public_transport_emissions, 2)}", f"{round(new_air_travel_emissions, 2)}", f"{round(new_food_emissions, 2)}"],
+        "Category": ["Electricity", "Gas", "Car", "Public Transport", "Air", "Food", "Pets"],  # Use a list for consistency
+        "Your Original Result (kgCO2e/mth)": [f"{round(st.session_state.original_electricity_emissions, 2)}", f"{round(st.session_state.original_gas_emissions, 2)}", f"{round(st.session_state.original_car_emissions, 2)}", f"{round(st.session_state.original_public_transport_emissions, 2)}", f"{round(st.session_state.original_air_travel_emissions, 2)}", f"{round(st.session_state.original_food_emissions, 2)}", f"{round(st.session_state.original_pet_emissions, 2)}"],
+        "Your New Carbon Footprint (kgCO2e/mth)": [f"{round(new_electricity_emissions, 2)}", f"{round(new_gas_emissions, 2)}", f"{round(new_car_emissions, 2)}", f"{round(new_public_transport_emissions, 2)}", f"{round(new_air_travel_emissions, 2)}", f"{round(new_food_emissions, 2)}", f"{round(new_pet_emissions, 2)}"],
     }
 
     # Create a Pandas DataFrame
@@ -481,6 +536,16 @@ if green_electricity:
     st.write("* I will move to a 100 percent green electricity provider or tariff. Your next step might be to find the best green electricity provider according to [Which](https://www.which.co.uk/reviews/energy-companies/article/energy-companies/which-energy-survey-results-ajqM43e6ycY8)")
 if reduce_car:
     st.write("* I will use my car", round(car_reduction, 2), "percent less. Your next step might be to ask if your company offers a cycle to work scheme. This will reduce the cost of buying a bike, which can either get you to work (and, bonus, it's great for body and mind) or to the nearest public transport. Consider also lift-sharing with your colleague to make the commute more fun and save you money.")
+if diff_first_car:
+    if new_car_1_type == "None":
+        st.write("* I will no longer drive a car.")
+    else:
+        st.write("* I will instead drive a ", new_car_1_size, new_car_1_type, "vehicle as my main car.")
+if diff_second_car:
+    if new_car_2_type == "None":
+        st.write("* I will no longer use a second car.")
+    else:
+        st.write("I will instead drive a", new_car_2_size, new_car_2_type, "vehicle as my second car.")
 if reduce_flights:
     st.write("* I will go", round(flights_reduction, 2), "percent less far on flights. Your next step might be to explore the website [Flight Free](https://flightfree.co.uk/)")
 
@@ -505,28 +570,7 @@ When considering carbon offsetting, it's helpful to be aware of the concept of "
 
 Several companies in the UK offer carbon offsetting services to individuals. These companies typically provide a range of offsetting projects, with a focus on forestry, renewable energy, and community development projects. Some of the most well-known companies include:
 
-* [Carbon Neutral Britain](https://carbonneutralbritain.org/): This company offers a variety of carbon offsetting projects, including forest projects. These projects are certified by the Verified Carbon Standard (VCS), the Gold Standard - Voluntary Emission Reductions (VER), and the United Nations - Certified Emission Reductions (CER) programmes. In addition to purchasing carbon credits, Carbon Neutral Britain also plants trees as part of its offsetting initiatives. It costs £6.99 to offset 1.25 tonnes of CO2e and plant 20 trees through Carbon Neutral Britain.
-* [Make it Wild](https://www.makeitwild.co.uk/product/carbon-offsetting-for-individuals): This company offers carbon offsetting projects for individuals and businesses. For individuals, they offer various amounts of carbon offsetting, with prices starting at £72. They also have a monthly subscription service available. The projects are located in North Yorkshire, Norfolk, and the Peak District. Once an order of carbon offsetting is placed, the company will either plant new trees or assign already planted trees to the individual or company. 
-* [CarbonClick](https://www.carbonclick.com/solutions/individuals): This company invests in projects that combat the climate crisis, including renewable energy initiatives, reforestation, and forest conservation. CarbonClick evaluates each project in a 7-Point Impact Check to ensure that the project has a positive impact. They prioritize projects that have a long-term impact and positive community benefits. 
-* [Forest Carbon](https://www.professionalenergy.co.uk/carbon-offsetting-schemes/): This company is a leader in the field of woodland formation and peatland regeneration for carbon capture and offsetting initiatives within the UK. The company offers both individual subscriptions and schemes for businesses. Individual subscriptions start at £8.50 per month.
-* [Carbon Footprint Ltd](https://www.professionalenergy.co.uk/carbon-offsetting-schemes/): This company offers reforestation, conservation, biodiversity, and solar energy carbon offsetting projects. The company itself is an ISO-certified business. 
-
-""")
-
-st.subheader("Pros and Cons")
-
-st.write("""
-
-Pros:
-
-* Supports emissions reduction: Carbon offsetting provides a way to compensate for emissions that cannot be avoided, by funding projects that reduce or remove greenhouse gases from the atmosphere.
-* Promotes sustainable development: Many carbon offsetting projects also contribute to sustainable development in communities, by providing jobs, improving health, and protecting biodiversity.
-* Raises awareness: Carbon offsetting can help to raise awareness of climate change and encourage individuals and businesses to take action to reduce their emissions.
-
-Cons:
-
-* May not be a long-term solution: Carbon offsetting is not a substitute for reducing emissions at the source.
-* Can be difficult to verify: It can be challenging to verify the actual emissions reductions or removals achieved by some carbon offsetting projects.
-* May have unintended consequences: Some carbon offsetting projects may have unintended consequences, such as displacement of communities or damage to ecosystems.
+* [Find out more here](https://www.professionalenergy.co.uk/carbon-offsetting-schemes/).
+* One example of an offsetting company for individuals is [CarbonClick](https://www.carbonclick.com/solutions/individuals)
 
 """)
